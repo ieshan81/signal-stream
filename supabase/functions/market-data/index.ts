@@ -6,15 +6,15 @@ const corsHeaders = {
 };
 
 const ALPHA_VANTAGE_API_KEY = Deno.env.get('ALPHA_VANTAGE_API_KEY');
-const RATE_LIMIT_MS = 15000; // 15 seconds between calls (4 calls/min to be safe)
-const LONG_CACHE_TTL = 30 * 60 * 1000; // 30 minutes for historical data
-const SHORT_CACHE_TTL = 2 * 60 * 1000; // 2 minutes for current prices
+const RATE_LIMIT_MS = 20000; // 20 seconds between calls (3 calls/min)
+const LONG_CACHE_TTL = 60 * 60 * 1000; // 60 minutes for historical data
+const SHORT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for current prices
 
 // In-memory cache
 const cache = new Map<string, { data: any; timestamp: number }>();
 let lastCallTime = 0;
 let consecutiveErrors = 0;
-const MAX_CONSECUTIVE_ERRORS = 3;
+const MAX_CONSECUTIVE_ERRORS = 1; // Switch to mock after just 1 error
 
 function getCached(key: string, ttlMs: number) {
   const cached = cache.get(key);
