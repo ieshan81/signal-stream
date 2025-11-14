@@ -1,5 +1,5 @@
-// Simulated real-time price streaming service
-// In production, replace with actual WebSocket connection to market data provider
+// Real-time price streaming service via WebSocket
+// Connects to Binance WebSocket API through edge function proxy
 
 export interface PriceUpdate {
   ticker: string;
@@ -11,11 +11,15 @@ export interface PriceUpdate {
 
 type PriceUpdateCallback = (update: PriceUpdate) => void;
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const WS_URL = SUPABASE_URL.replace('https://', 'wss://');
+
 class PriceStreamService {
   private subscribers: Map<string, Set<PriceUpdateCallback>> = new Map();
-  private intervals: Map<string, NodeJS.Timeout> = new Map();
-  private lastPrices: Map<string, number> = new Map();
+  private ws: WebSocket | null = null;
+  private reconnectTimer: any = null;
   private baselinePrices: Map<string, number> = new Map();
+  private isConnecting: boolean = false;
 
   subscribe(ticker: string, callback: PriceUpdateCallback, basePrice?: number) {
     if (!this.subscribers.has(ticker)) {
@@ -24,14 +28,16 @@ class PriceStreamService {
     this.subscribers.get(ticker)!.add(callback);
 
     // Store baseline price if provided
-    if (basePrice !== undefined && !this.baselinePrices.has(ticker)) {
+    if (basePrice !== undefined) {
       this.baselinePrices.set(ticker, basePrice);
-      this.lastPrices.set(ticker, basePrice);
     }
 
-    // Start streaming if this is the first subscriber
-    if (this.subscribers.get(ticker)!.size === 1) {
-      this.startStreaming(ticker);
+    // Connect WebSocket if not already connected
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      this.connectWebSocket();
+    } else {
+      // If already connected, send subscribe message
+      this.sendSubscribe([ticker]);
     }
 
     // Return unsubscribe function
@@ -43,61 +49,114 @@ class PriceStreamService {
     if (subs) {
       subs.delete(callback);
       if (subs.size === 0) {
-        this.stopStreaming(ticker);
         this.subscribers.delete(ticker);
+        
+        // Send unsubscribe message if WebSocket is open
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ 
+            type: 'unsubscribe', 
+            tickers: [ticker] 
+          }));
+        }
       }
     }
   }
 
-  private startStreaming(ticker: string) {
-    // Simulate price updates every second
-    const interval = setInterval(() => {
-      const lastPrice = this.lastPrices.get(ticker) || this.baselinePrices.get(ticker) || 100;
-      const basePrice = this.baselinePrices.get(ticker) || lastPrice;
-      
-      // Generate realistic price movement (±0.5% typical, occasionally larger)
-      const volatility = Math.random() > 0.95 ? 0.02 : 0.005;
-      const change = (Math.random() - 0.5) * 2 * volatility;
-      const newPrice = lastPrice * (1 + change);
-      
-      const priceChange = newPrice - basePrice;
-      const changePercent = (priceChange / basePrice) * 100;
+  private connectWebSocket() {
+    if (this.isConnecting) {
+      return;
+    }
 
-      this.lastPrices.set(ticker, newPrice);
+    this.isConnecting = true;
+    console.log('[PriceStream] Connecting to WebSocket...');
 
-      const update: PriceUpdate = {
-        ticker,
-        price: newPrice,
-        change: priceChange,
-        changePercent,
-        timestamp: Date.now(),
+    try {
+      this.ws = new WebSocket(`${WS_URL}/functions/v1/price-stream`);
+
+      this.ws.onopen = () => {
+        console.log('[PriceStream] WebSocket connected');
+        this.isConnecting = false;
+
+        // Subscribe to all active tickers
+        const tickers = Array.from(this.subscribers.keys());
+        if (tickers.length > 0) {
+          this.sendSubscribe(tickers);
+        }
       };
 
-      // Notify all subscribers
-      const subs = this.subscribers.get(ticker);
-      if (subs) {
-        subs.forEach(callback => callback(update));
-      }
-    }, 1000);
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
 
-    this.intervals.set(ticker, interval);
+          if (data.type === 'subscribed') {
+            console.log('[PriceStream] Subscribed to:', data.tickers);
+            return;
+          }
+
+          // Handle price update
+          const update: PriceUpdate = data;
+          const subs = this.subscribers.get(update.ticker);
+          if (subs) {
+            subs.forEach(callback => callback(update));
+          }
+        } catch (error) {
+          console.error('[PriceStream] Error processing message:', error);
+        }
+      };
+
+      this.ws.onerror = (error) => {
+        console.error('[PriceStream] WebSocket error:', error);
+      };
+
+      this.ws.onclose = () => {
+        console.log('[PriceStream] WebSocket disconnected');
+        this.isConnecting = false;
+        this.ws = null;
+
+        // Attempt reconnection if there are active subscribers
+        if (this.subscribers.size > 0) {
+          console.log('[PriceStream] Reconnecting in 3 seconds...');
+          this.reconnectTimer = setTimeout(() => {
+            this.connectWebSocket();
+          }, 3000);
+        }
+      };
+    } catch (error) {
+      console.error('[PriceStream] Error creating WebSocket:', error);
+      this.isConnecting = false;
+    }
   }
 
-  private stopStreaming(ticker: string) {
-    const interval = this.intervals.get(ticker);
-    if (interval) {
-      clearInterval(interval);
-      this.intervals.delete(ticker);
+  private sendSubscribe(tickers: string[]) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      const basePrices: Record<string, number> = {};
+      tickers.forEach(ticker => {
+        const price = this.baselinePrices.get(ticker);
+        if (price) {
+          basePrices[ticker] = price;
+        }
+      });
+
+      this.ws.send(JSON.stringify({
+        type: 'subscribe',
+        tickers,
+        basePrices,
+      }));
     }
-    this.lastPrices.delete(ticker);
-    this.baselinePrices.delete(ticker);
   }
 
   cleanup() {
-    this.intervals.forEach(interval => clearInterval(interval));
-    this.intervals.clear();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+    
     this.subscribers.clear();
-    this.lastPrices.clear();
     this.baselinePrices.clear();
   }
 }

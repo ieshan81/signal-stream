@@ -1,1 +1,10 @@
 project_id = "gbgswohlgmxtcnddjwxj"
+
+[functions.market-data]
+verify_jwt = false
+
+[functions.crypto-data]
+verify_jwt = false
+
+[functions.price-stream]
+verify_jwt = false
