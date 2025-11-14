@@ -2,10 +2,24 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Activity, TrendingUp, BarChart3, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LiveTickerTape } from "@/components/LiveTickerTape";
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const [healthStatus, setHealthStatus] = useState<"ok" | "error">("ok");
   const location = useLocation();
+  
+  // Live ticker tapes - show top assets from different categories
+  const tickerTickers = ["AAPL", "MSFT", "BTC-USD", "ETH-USD", "EURUSD=X", "GOOGL", "TSLA", "SOL-USD"];
+  const tickerBasePrices = new Map([
+    ["AAPL", 150],
+    ["MSFT", 380],
+    ["BTC-USD", 43000],
+    ["ETH-USD", 2300],
+    ["EURUSD=X", 1.08],
+    ["GOOGL", 140],
+    ["TSLA", 240],
+    ["SOL-USD", 100],
+  ]);
 
   useEffect(() => {
     // Health check is always ok in client-side only version
@@ -73,6 +87,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+
+      {/* Live Ticker Tape */}
+      <LiveTickerTape tickers={tickerTickers} basePrices={tickerBasePrices} />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">{children}</main>

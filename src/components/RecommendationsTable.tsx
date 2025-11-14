@@ -4,6 +4,7 @@ import { Card } from "./ui/card";
 import { ArrowUp, ArrowDown, Minus, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
+import { AnimatedPrice } from "@/components/AnimatedPrice";
 
 interface Props {
   recommendations: AssetRecommendation[];
@@ -58,18 +59,11 @@ export function RecommendationsTable({ recommendations }: Props) {
 
               {/* Price Info */}
               <div className="flex flex-col items-end">
-                <span className="font-mono text-base font-semibold text-foreground">
-                  ${rec.currentPrice.toFixed(2)}
-                </span>
-                <span
-                  className={cn(
-                    "text-xs font-medium flex items-center gap-1",
-                    rec.priceChangePct >= 0 ? "text-success" : "text-destructive"
-                  )}
-                >
-                  {rec.priceChangePct >= 0 ? "+" : ""}
-                  {rec.priceChangePct.toFixed(2)}%
-                </span>
+                <AnimatedPrice 
+                  ticker={rec.ticker} 
+                  basePrice={rec.currentPrice}
+                  showChange={true}
+                />
               </div>
 
               {/* Recommendation */}
