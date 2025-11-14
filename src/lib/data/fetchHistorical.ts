@@ -1,8 +1,12 @@
 import { PriceData, AssetType } from "../types";
+import { getDataEndpoint, toBinanceSymbol } from "../utils/tickerMapping";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 /**
- * Fetches historical price data for a given ticker
- * Uses Yahoo Finance API as a free data source
+ * Fetches historical price data for a given ticker from real market data APIs
+ * - Stocks/Forex: Alpha Vantage (via market-data edge function)
+ * - Crypto: Binance (via crypto-data edge function)
  */
 export async function fetchHistoricalData(
   ticker: string,
@@ -10,42 +14,30 @@ export async function fetchHistoricalData(
   days: number = 365
 ): Promise<PriceData[]> {
   try {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    let url: string;
+    
+    if (assetType === "crypto") {
+      const symbol = toBinanceSymbol(ticker);
+      url = `${SUPABASE_URL}/functions/v1/crypto-data?action=historical&symbol=${symbol}&limit=${days}`;
+    } else {
+      url = `${SUPABASE_URL}/functions/v1/market-data?action=historical&ticker=${ticker}&days=${days}`;
+    }
 
-    const period1 = Math.floor(startDate.getTime() / 1000);
-    const period2 = Math.floor(endDate.getTime() / 1000);
-
-    // Use Yahoo Finance API
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?period1=${period1}&period2=${period2}&interval=1d`;
-
+    console.log(`[Fetch Historical] ${ticker} (${assetType})`);
     const response = await fetch(url);
+    
     if (!response.ok) {
-      throw new Error(`Failed to fetch data for ${ticker}`);
+      throw new Error(`Failed to fetch data for ${ticker}: ${response.statusText}`);
     }
 
     const data = await response.json();
-    const result = data.chart.result[0];
-
-    if (!result || !result.timestamp) {
-      throw new Error(`No data available for ${ticker}`);
+    
+    if (data.error) {
+      throw new Error(data.error);
     }
 
-    const timestamps = result.timestamp;
-    const quotes = result.indicators.quote[0];
-
-    const priceData: PriceData[] = timestamps.map((timestamp: number, i: number) => ({
-      date: new Date(timestamp * 1000).toISOString().split("T")[0],
-      open: quotes.open[i] || 0,
-      high: quotes.high[i] || 0,
-      low: quotes.low[i] || 0,
-      close: quotes.close[i] || 0,
-      volume: quotes.volume[i] || 0,
-    }));
-
     // Filter out invalid data points
-    return priceData.filter((d) => d.close > 0);
+    return data.filter((d: PriceData) => d.close > 0);
   } catch (error) {
     console.error(`Error fetching data for ${ticker}:`, error);
     throw error;
@@ -53,25 +45,36 @@ export async function fetchHistoricalData(
 }
 
 /**
- * Fetches current price for a ticker
+ * Fetches current price for a ticker from real market data APIs
  */
-export async function fetchCurrentPrice(ticker: string): Promise<number> {
+export async function fetchCurrentPrice(ticker: string, assetType?: AssetType): Promise<number> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+    // Detect asset type if not provided
+    const type = assetType || (ticker.includes('-USD') ? 'crypto' : ticker.includes('=X') ? 'forex' : 'stocks');
+    
+    let url: string;
+    
+    if (type === "crypto") {
+      const symbol = toBinanceSymbol(ticker);
+      url = `${SUPABASE_URL}/functions/v1/crypto-data?action=current&symbol=${symbol}`;
+    } else {
+      url = `${SUPABASE_URL}/functions/v1/market-data?action=current&ticker=${ticker}`;
+    }
 
+    console.log(`[Fetch Current] ${ticker} (${type})`);
     const response = await fetch(url);
+    
     if (!response.ok) {
-      throw new Error(`Failed to fetch current price for ${ticker}`);
+      throw new Error(`Failed to fetch current price for ${ticker}: ${response.statusText}`);
     }
 
     const data = await response.json();
-    const result = data.chart.result[0];
-
-    if (!result || !result.meta) {
-      throw new Error(`No price data available for ${ticker}`);
+    
+    if (data.error) {
+      throw new Error(data.error);
     }
 
-    return result.meta.regularMarketPrice || 0;
+    return data.price || 0;
   } catch (error) {
     console.error(`Error fetching current price for ${ticker}:`, error);
     throw error;
