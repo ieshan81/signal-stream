@@ -13,6 +13,11 @@ interface ClientSubscription {
 
 const clients = new Set<ClientSubscription>();
 const binanceConnections = new Map<string, WebSocket>();
+const symbolToTicker = new Map<string, string>(); // Track symbol -> original ticker mapping
+
+function isCryptoTicker(ticker: string): boolean {
+  return ticker.includes('-USD') || ticker.includes('USDT');
+}
 
 function toBinanceSymbol(ticker: string): string {
   // BTC-USD -> BTCUSDT
@@ -24,12 +29,21 @@ function fromBinanceSymbol(symbol: string): string {
   return symbol.replace('USDT', '-USD');
 }
 
-function connectToBinance(symbol: string) {
+function connectToBinance(symbol: string, originalTicker: string) {
+  // Only connect if it's actually a crypto ticker
+  if (!isCryptoTicker(originalTicker)) {
+    console.log(`[Binance] Skipping non-crypto ticker: ${originalTicker}`);
+    return;
+  }
+
   if (binanceConnections.has(symbol)) {
     return; // Already connected
   }
 
-  console.log(`[Binance] Connecting to ${symbol}`);
+  // Store the mapping
+  symbolToTicker.set(symbol, originalTicker);
+
+  console.log(`[Binance] Connecting to ${symbol} for ${originalTicker}`);
   const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${symbol.toLowerCase()}@trade`);
   
   ws.onopen = () => {
@@ -80,8 +94,13 @@ function connectToBinance(symbol: string) {
     );
     
     if (hasSubscribers) {
-      console.log(`[Binance] Reconnecting to ${symbol} in 3s...`);
-      setTimeout(() => connectToBinance(symbol), 3000);
+      const storedTicker = symbolToTicker.get(symbol);
+      if (storedTicker) {
+        console.log(`[Binance] Reconnecting to ${symbol} in 3s...`);
+        setTimeout(() => connectToBinance(symbol, storedTicker), 3000);
+      }
+    } else {
+      symbolToTicker.delete(symbol);
     }
   };
 
@@ -128,9 +147,13 @@ serve((req) => {
             client.baselinePrices.set(ticker, basePrices[ticker]);
           }
           
-          // Connect to Binance for this symbol
-          const symbol = toBinanceSymbol(ticker);
-          connectToBinance(symbol);
+          // Only connect to Binance if it's a crypto ticker
+          if (isCryptoTicker(ticker)) {
+            const symbol = toBinanceSymbol(ticker);
+            connectToBinance(symbol, ticker);
+          } else {
+            console.log(`[Client] Skipping WebSocket for non-crypto: ${ticker}`);
+          }
         });
         
         socket.send(JSON.stringify({ 

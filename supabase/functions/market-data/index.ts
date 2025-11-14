@@ -79,17 +79,26 @@ serve(async (req) => {
       const response = await callAlphaVantage(apiUrl);
       const data = await response.json();
 
+      console.log(`[Alpha Vantage Response Keys]`, Object.keys(data));
+
       if (data['Error Message']) {
         throw new Error(`Alpha Vantage error: ${data['Error Message']}`);
       }
 
       if (data['Note']) {
+        console.error('[Rate Limit]', data['Note']);
         throw new Error('API rate limit reached. Please try again in 1 minute.');
+      }
+
+      if (data['Information']) {
+        console.error('[API Info]', data['Information']);
+        throw new Error('API call frequency exceeded. Please try again later.');
       }
 
       const timeSeries = data['Time Series (Daily)'];
       if (!timeSeries) {
-        throw new Error(`No data available for ${ticker}`);
+        console.error('[No Time Series Data]', JSON.stringify(data, null, 2));
+        throw new Error(`No data available for ${ticker}. API response: ${JSON.stringify(data).substring(0, 200)}`);
       }
 
       // Transform to PriceData format

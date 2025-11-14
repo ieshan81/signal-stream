@@ -22,6 +22,14 @@ class PriceStreamService {
   private isConnecting: boolean = false;
 
   subscribe(ticker: string, callback: PriceUpdateCallback, basePrice?: number) {
+    // Only support crypto tickers for real-time streaming
+    const isCrypto = ticker.includes('-USD') || ticker.includes('USDT');
+    if (!isCrypto) {
+      console.log(`[PriceStream] Skipping WebSocket for non-crypto ticker: ${ticker}`);
+      // For stocks/forex, return a no-op unsubscribe function
+      return () => {};
+    }
+
     if (!this.subscribers.has(ticker)) {
       this.subscribers.set(ticker, new Set());
     }
