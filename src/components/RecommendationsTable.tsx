@@ -5,6 +5,7 @@ import { ArrowUp, ArrowDown, Minus, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 import { AnimatedPrice } from "@/components/AnimatedPrice";
+import { InfoTooltip } from "@/components/InfoTooltip";
 
 interface Props {
   recommendations: AssetRecommendation[];
@@ -87,7 +88,10 @@ export function RecommendationsTable({ recommendations }: Props) {
 
               {/* Confidence */}
               <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-muted-foreground">Confidence</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">Confidence</span>
+                  <InfoTooltip content="How certain the AI models are about this recommendation (0-100%). Higher means stronger conviction." />
+                </div>
                 <div className="flex flex-col items-center">
                   <span className="font-mono text-base font-bold text-primary">
                     {rec.confidence.toFixed(0)}%
@@ -103,7 +107,10 @@ export function RecommendationsTable({ recommendations }: Props) {
 
               {/* Volatility */}
               <div className="flex flex-col items-center gap-1">
-                <span className="text-xs text-muted-foreground">Volatility</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">Volatility</span>
+                  <InfoTooltip content="Measure of price fluctuations. Higher volatility means more risk but potentially higher returns." />
+                </div>
                 <span className="font-mono text-sm font-semibold text-warning">
                   {(rec.volatility * 100).toFixed(1)}%
                 </span>
@@ -111,7 +118,10 @@ export function RecommendationsTable({ recommendations }: Props) {
 
               {/* Signals Summary */}
               <div className="flex flex-col gap-1 min-w-[120px]">
-                <span className="text-xs text-muted-foreground mb-1">Signals</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground mb-1">Signals</span>
+                  <InfoTooltip content="Strategy indicators: MA (Moving Average trend), RSI (momentum), Multi-Factor (combined metrics), ML (AI predictions). Green=buy, Red=sell, Gray=neutral." />
+                </div>
                 <div className="flex flex-wrap gap-1">
                   {Object.values(rec.contributingSignals).map((signal, i) => (
                     <Badge

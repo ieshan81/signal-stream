@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Search, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { InfoTooltip } from "@/components/InfoTooltip";
 
 const Index = () => {
   const [recommendations, setRecommendations] = useState<AssetRecommendation[]>([]);
@@ -109,19 +110,31 @@ const Index = () => {
         {/* Statistics Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="p-4 bg-card/50 border-success/30">
-            <div className="text-xs text-muted-foreground mb-1">Buy Signals</div>
+            <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+              Buy Signals
+              <InfoTooltip content="Number of assets with positive buy signals. Green indicates upward momentum based on technical indicators." />
+            </div>
             <div className="text-2xl font-bold text-success">{stats.buyCount}</div>
           </Card>
           <Card className="p-4 bg-card/50 border-destructive/30">
-            <div className="text-xs text-muted-foreground mb-1">Sell Signals</div>
+            <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+              Sell Signals
+              <InfoTooltip content="Number of assets with negative sell signals. Red indicates potential downward movement or overbought conditions." />
+            </div>
             <div className="text-2xl font-bold text-destructive">{stats.sellCount}</div>
           </Card>
           <Card className="p-4 bg-card/50 border-border">
-            <div className="text-xs text-muted-foreground mb-1">Hold Signals</div>
+            <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+              Hold Signals
+              <InfoTooltip content="Assets with neutral signals. No clear directional bias, suggesting to maintain current positions." />
+            </div>
             <div className="text-2xl font-bold text-foreground">{stats.holdCount}</div>
           </Card>
           <Card className="p-4 bg-card/50 border-primary/30">
-            <div className="text-xs text-muted-foreground mb-1">Avg Confidence</div>
+            <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+              Avg Confidence
+              <InfoTooltip content="Average certainty of AI models across all signals (0-100%). Higher confidence means stronger conviction in the recommendation." />
+            </div>
             <div className="text-2xl font-bold text-primary">{stats.avgConfidence.toFixed(0)}%</div>
           </Card>
         </div>

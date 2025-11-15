@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWatchlist, useWatchlistManager } from "@/hooks/useWatchlist";
 import { usePositionManager } from "@/hooks/usePortfolio";
 import { toast } from "sonner";
+import { InfoTooltip } from "@/components/InfoTooltip";
 import {
   Dialog,
   DialogContent,
@@ -258,7 +259,10 @@ const AssetDetail = () => {
           </Card>
 
           <Card className="p-6 bg-card/50">
-            <div className="text-xs text-muted-foreground mb-2">Volatility (Annual)</div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-2">
+              Volatility (Annual)
+              <InfoTooltip content="Annual volatility measures price fluctuation intensity. Higher = more risk & potential reward. Based on 60-day rolling data." />
+            </div>
             <div className="text-3xl font-bold font-mono text-warning">
               {assetData.statistics.volatility.toFixed(1)}%
             </div>
@@ -324,12 +328,25 @@ const AssetDetail = () => {
 
         {/* Strategy Signals */}
         <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4 text-foreground">Strategy Signals</h3>
+          <div className="flex items-center gap-2 mb-4">
+            <h3 className="text-lg font-semibold text-foreground">Strategy Signals</h3>
+            <InfoTooltip content="Technical indicators from different trading strategies. Green signals suggest buying opportunity, red suggests selling, gray is neutral." />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {assetData.signals.map((signal, i) => (
               <Card key={i} className="p-4 bg-secondary/50">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-semibold text-foreground">{signal.name}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-semibold text-foreground">{signal.name}</h4>
+                    <InfoTooltip 
+                      content={
+                        signal.name.includes("MA") ? "Moving Average: Tracks price trends by averaging prices over time. Crossovers indicate momentum shifts." :
+                        signal.name.includes("RSI") ? "Relative Strength Index: Momentum indicator (0-100). >70 = overbought, <30 = oversold." :
+                        signal.name.includes("Multi") ? "Multi-Factor: Combines momentum, volume, and volatility for comprehensive analysis." :
+                        "Machine Learning: AI predictions based on historical patterns and market conditions."
+                      } 
+                    />
+                  </div>
                   <Badge variant="outline" className={cn("font-semibold", getSignalColor(signal.direction))}>
                     {signal.direction.toUpperCase()}
                   </Badge>
