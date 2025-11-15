@@ -14,7 +14,132 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      portfolio_positions: {
+        Row: {
+          asset_type: string
+          cost_basis: number
+          created_at: string | null
+          id: string
+          quantity: number
+          ticker: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          asset_type: string
+          cost_basis: number
+          created_at?: string | null
+          id?: string
+          quantity: number
+          ticker: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          asset_type?: string
+          cost_basis?: number
+          created_at?: string | null
+          id?: string
+          quantity?: number
+          ticker?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      portfolio_recommendations: {
+        Row: {
+          action: string
+          amount: number | null
+          amount_type: string | null
+          confidence: number | null
+          created_at: string | null
+          id: string
+          quant_score: number | null
+          rationale: string
+          ticker: string
+          user_id: string
+          volatility: number | null
+        }
+        Insert: {
+          action: string
+          amount?: number | null
+          amount_type?: string | null
+          confidence?: number | null
+          created_at?: string | null
+          id?: string
+          quant_score?: number | null
+          rationale: string
+          ticker: string
+          user_id: string
+          volatility?: number | null
+        }
+        Update: {
+          action?: string
+          amount?: number | null
+          amount_type?: string | null
+          confidence?: number | null
+          created_at?: string | null
+          id?: string
+          quant_score?: number | null
+          rationale?: string
+          ticker?: string
+          user_id?: string
+          volatility?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      watchlist: {
+        Row: {
+          added_at: string | null
+          asset_type: string
+          id: string
+          ticker: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string | null
+          asset_type: string
+          id?: string
+          ticker: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string | null
+          asset_type?: string
+          id?: string
+          ticker?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
