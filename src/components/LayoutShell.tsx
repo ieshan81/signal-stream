@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { LiveTickerTape } from "@/components/LiveTickerTape";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { TickerSearch } from "@/components/TickerSearch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +54,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Activity className="h-8 w-8 text-primary" />
               <div>
@@ -62,6 +63,11 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                   Multi-Asset Trading Intelligence
                 </p>
               </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="hidden lg:flex flex-1 max-w-xl">
+              <TickerSearch />
             </div>
 
             <div className="flex items-center gap-6">
@@ -127,6 +133,11 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </div>
+        </div>
+        
+        {/* Mobile Search */}
+        <div className="lg:hidden px-4 pb-4">
+          <TickerSearch />
         </div>
       </header>
 
