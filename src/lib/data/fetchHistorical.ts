@@ -26,14 +26,15 @@ export async function fetchHistoricalData(
     console.log(`[Fetch Historical] ${ticker} (${assetType})`);
     const response = await fetch(url);
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch data for ${ticker}: ${response.statusText}`);
-    }
-
     const data = await response.json();
     
-    if (data.error) {
-      throw new Error(data.error);
+    if (!response.ok || data.error) {
+      const errorMsg = data.error || data.message || `Failed to fetch data for ${ticker}`;
+      throw new Error(errorMsg);
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error(`No data available for ticker "${ticker}". Please verify the ticker symbol is correct.`);
     }
 
     // Filter out invalid data points
@@ -64,17 +65,18 @@ export async function fetchCurrentPrice(ticker: string, assetType?: AssetType): 
     console.log(`[Fetch Current] ${ticker} (${type})`);
     const response = await fetch(url);
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch current price for ${ticker}: ${response.statusText}`);
-    }
-
     const data = await response.json();
     
-    if (data.error) {
-      throw new Error(data.error);
+    if (!response.ok || data.error) {
+      const errorMsg = data.error || data.message || `Failed to fetch current price for ${ticker}`;
+      throw new Error(errorMsg);
     }
 
-    return data.price || 0;
+    if (!data.price || data.price <= 0) {
+      throw new Error(`Invalid price data for ticker "${ticker}". Please verify the ticker symbol.`);
+    }
+
+    return data.price;
   } catch (error) {
     console.error(`Error fetching current price for ${ticker}:`, error);
     throw error;

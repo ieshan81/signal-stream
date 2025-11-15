@@ -111,13 +111,27 @@ const AssetDetail = () => {
   if (error || !assetData) {
     return (
       <LayoutShell>
-        <Card className="p-12 text-center">
-          <p className="text-destructive font-semibold mb-2">
-            {error || "Asset not found"}
+        <Card className="p-12 text-center max-w-2xl mx-auto">
+          <div className="text-destructive mb-4">
+            <svg className="w-16 h-16 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <h3 className="text-xl font-semibold mb-2">Unable to Load Ticker</h3>
+          </div>
+          <p className="text-foreground font-medium mb-2">
+            {ticker ? `"${ticker}"` : "No ticker specified"}
           </p>
-          <p className="text-muted-foreground text-sm mb-4">
-            {ticker ? `Unable to load data for ${ticker}. This ticker may not exist or is not supported.` : "No ticker specified"}
+          <p className="text-muted-foreground text-sm mb-6 max-w-md mx-auto">
+            {error || `This ticker symbol was not found. Please verify you're using the correct format:`}
           </p>
+          <div className="bg-muted/50 rounded-lg p-4 mb-6 text-left text-sm max-w-md mx-auto">
+            <p className="font-semibold mb-2">Ticker Format Examples:</p>
+            <ul className="space-y-1 text-muted-foreground">
+              <li>• Stocks: AAPL, MSFT, GOOGL, TSLA</li>
+              <li>• Crypto: BTC-USD, ETH-USD, SOL-USD</li>
+              <li>• Forex: EURUSD=X, GBPUSD=X, USDJPY=X</li>
+            </ul>
+          </div>
           <Link to="/">
             <Button>Back to Dashboard</Button>
           </Link>
