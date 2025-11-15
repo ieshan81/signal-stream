@@ -51,8 +51,7 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action');
     const ticker = url.searchParams.get('ticker');
-    const days = parseInt(url.searchParams.get('days') || '365');
-
+    
     if (!action || !ticker) {
       return new Response(
         JSON.stringify({ error: 'Missing action or ticker parameter' }),
@@ -60,10 +59,31 @@ serve(async (req) => {
       );
     }
 
+    // Validate ticker format (alphanumeric, dashes, equals, dots, underscores)
+    const tickerRegex = /^[A-Z0-9._=^-]{1,20}$/i;
+    if (!tickerRegex.test(ticker)) {
+      console.error(`[Invalid Ticker] ${ticker}`);
+      return new Response(
+        JSON.stringify({ error: 'Invalid ticker format. Use alphanumeric characters, dashes, dots, equals, or underscores (1-20 chars)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate and parse days parameter
+    const daysParam = url.searchParams.get('days') || '365';
+    const days = parseInt(daysParam);
+    if (isNaN(days) || days < 1 || days > 3650) {
+      console.error(`[Invalid Days] ${daysParam}`);
+      return new Response(
+        JSON.stringify({ error: 'Invalid days parameter. Must be between 1 and 3650' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`[Request] action=${action}, ticker=${ticker}, days=${days}`);
 
-    // Yahoo Finance accepts tickers as-is (AAPL, EURUSD=X, etc.)
-    const symbol = ticker;
+    // URL encode ticker for safe API usage
+    const symbol = encodeURIComponent(ticker);
 
     if (action === 'historical') {
       const cacheKey = `hist_${symbol}_${days}`;

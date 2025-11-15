@@ -51,8 +51,7 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action');
     const symbol = url.searchParams.get('symbol');
-    const limit = parseInt(url.searchParams.get('limit') || '365');
-
+    
     if (!action || !symbol) {
       return new Response(
         JSON.stringify({ error: 'Missing action or symbol parameter' }),
@@ -60,10 +59,31 @@ serve(async (req) => {
       );
     }
 
+    // Validate symbol format (alphanumeric, dashes, dots, underscores)
+    const symbolRegex = /^[A-Z0-9._-]{1,20}$/i;
+    if (!symbolRegex.test(symbol)) {
+      console.error(`[Invalid Symbol] ${symbol}`);
+      return new Response(
+        JSON.stringify({ error: 'Invalid symbol format. Use alphanumeric characters, dashes, dots, or underscores (1-20 chars)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate and parse limit parameter
+    const limitParam = url.searchParams.get('limit') || '365';
+    const limit = parseInt(limitParam);
+    if (isNaN(limit) || limit < 1 || limit > 3650) {
+      console.error(`[Invalid Limit] ${limitParam}`);
+      return new Response(
+        JSON.stringify({ error: 'Invalid limit parameter. Must be between 1 and 3650' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`[Request] action=${action}, symbol=${symbol}, limit=${limit}`);
 
     // Convert BTCUSDT format to BTC-USD for Yahoo Finance
-    const yahooSymbol = symbol.replace('USDT', '-USD');
+    const yahooSymbol = encodeURIComponent(symbol.replace('USDT', '-USD'));
 
     if (action === 'historical') {
       const cacheKey = `hist_${yahooSymbol}_${limit}`;
