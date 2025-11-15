@@ -4,25 +4,99 @@ import { LayoutShell } from "@/components/LayoutShell";
 import { getAssetDetails, AssetDetails } from "@/lib/api/asset";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, ArrowLeft, TrendingUp, TrendingDown, Star, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useWatchlist, useWatchlistManager } from "@/hooks/useWatchlist";
+import { usePositionManager } from "@/hooks/usePortfolio";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const AssetDetail = () => {
   const { ticker } = useParams<{ ticker: string }>();
   const [assetData, setAssetData] = useState<AssetDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { watchlist, refetch: refetchWatchlist } = useWatchlist();
+  const { addToWatchlist, removeFromWatchlist } = useWatchlistManager();
+  const { addPosition } = usePositionManager();
+  
+  const [addPositionOpen, setAddPositionOpen] = useState(false);
+  const [quantity, setQuantity] = useState("");
+  const [costBasis, setCostBasis] = useState("");
+
+  const isInWatchlist = watchlist.some(item => item.ticker === ticker);
 
   useEffect(() => {
     if (!ticker) return;
 
     setLoading(true);
+    setError(null);
     getAssetDetails(ticker)
       .then(setAssetData)
-      .catch(console.error)
+      .catch((err) => {
+        console.error(err);
+        setError(err.message || "Failed to load asset data");
+      })
       .finally(() => setLoading(false));
   }, [ticker]);
+
+  const handleWatchlistToggle = async () => {
+    if (!user) {
+      toast.error("Please sign in to use watchlist");
+      return;
+    }
+
+    if (!assetData) return;
+
+    if (isInWatchlist) {
+      const item = watchlist.find(w => w.ticker === ticker);
+      if (item) {
+        const { error } = await removeFromWatchlist(item.id);
+        if (!error) refetchWatchlist();
+      }
+    } else {
+      const { error } = await addToWatchlist(ticker!, assetData.assetType);
+      if (!error) refetchWatchlist();
+    }
+  };
+
+  const handleAddPosition = async () => {
+    if (!user) {
+      toast.error("Please sign in to manage portfolio");
+      return;
+    }
+
+    if (!assetData || !quantity || !costBasis) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    const { error } = await addPosition(
+      ticker!,
+      assetData.assetType,
+      parseFloat(quantity),
+      parseFloat(costBasis)
+    );
+
+    if (!error) {
+      setAddPositionOpen(false);
+      setQuantity("");
+      setCostBasis("");
+    }
+  };
 
   if (loading) {
     return (
@@ -34,13 +108,18 @@ const AssetDetail = () => {
     );
   }
 
-  if (!assetData) {
+  if (error || !assetData) {
     return (
       <LayoutShell>
         <Card className="p-12 text-center">
-          <p className="text-muted-foreground">Asset not found</p>
+          <p className="text-destructive font-semibold mb-2">
+            {error || "Asset not found"}
+          </p>
+          <p className="text-muted-foreground text-sm mb-4">
+            {ticker ? `Unable to load data for ${ticker}. This ticker may not exist or is not supported.` : "No ticker specified"}
+          </p>
           <Link to="/">
-            <Button className="mt-4">Back to Dashboard</Button>
+            <Button>Back to Dashboard</Button>
           </Link>
         </Card>
       </LayoutShell>
@@ -81,6 +160,63 @@ const AssetDetail = () => {
               </Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">Detailed Analysis & Signals</p>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant={isInWatchlist ? "secondary" : "outline"}
+              size="sm"
+              onClick={handleWatchlistToggle}
+              disabled={!user}
+            >
+              <Star className={cn("h-4 w-4", isInWatchlist && "fill-current")} />
+              <span className="ml-2">{isInWatchlist ? "In Watchlist" : "Add to Watchlist"}</span>
+            </Button>
+            
+            <Dialog open={addPositionOpen} onOpenChange={setAddPositionOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" disabled={!user}>
+                  <Plus className="h-4 w-4" />
+                  <span className="ml-2">Add to Portfolio</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add {assetData.ticker} to Portfolio</DialogTitle>
+                  <DialogDescription>
+                    Enter the quantity and cost basis for this position
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Quantity</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      step="any"
+                      placeholder="10"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cost-basis">Cost Basis (per unit)</Label>
+                    <Input
+                      id="cost-basis"
+                      type="number"
+                      step="0.01"
+                      placeholder="100.00"
+                      value={costBasis}
+                      onChange={(e) => setCostBasis(e.target.value)}
+                    />
+                  </div>
+                  <Button onClick={handleAddPosition} className="w-full">
+                    Add Position
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
