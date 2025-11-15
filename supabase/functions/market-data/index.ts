@@ -5,8 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ALPHA_VANTAGE_API_KEY = Deno.env.get('ALPHA_VANTAGE_API_KEY');
-const RATE_LIMIT_MS = 20000; // 20 seconds between calls (3 calls/min)
+const RATE_LIMIT_MS = 2000; // 2 seconds between calls (conservative)
 const LONG_CACHE_TTL = 60 * 60 * 1000; // 60 minutes for historical data
 const SHORT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for current prices
 
@@ -28,7 +27,7 @@ function setCache(key: string, data: any) {
   console.log(`[Cache SET] ${key}`);
 }
 
-async function callAlphaVantage(url: string) {
+async function callYahooFinance(url: string) {
   const now = Date.now();
   const timeSinceLastCall = now - lastCallTime;
   
@@ -39,7 +38,7 @@ async function callAlphaVantage(url: string) {
   }
   
   lastCallTime = Date.now();
-  console.log(`[API Call] ${url.split('?')[0]}`);
+  console.log(`[Yahoo Finance API] ${url}`);
   return fetch(url);
 }
 
@@ -63,10 +62,8 @@ serve(async (req) => {
 
     console.log(`[Request] action=${action}, ticker=${ticker}, days=${days}`);
 
-    // Handle forex ticker format (EURUSD=X -> EUR/USD)
-    const symbol = ticker.includes('=X') 
-      ? ticker.replace('=X', '').replace(/(.{3})(.{3})/, '$1/$2')
-      : ticker;
+    // Yahoo Finance accepts tickers as-is (AAPL, EURUSD=X, etc.)
+    const symbol = ticker;
 
     if (action === 'historical') {
       const cacheKey = `hist_${symbol}_${days}`;
@@ -77,49 +74,47 @@ serve(async (req) => {
         });
       }
 
-      const apiUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${symbol}&outputsize=full&apikey=${ALPHA_VANTAGE_API_KEY}`;
-      const response = await callAlphaVantage(apiUrl);
+      const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${days}d`;
+      const response = await callYahooFinance(apiUrl);
+      
+      if (!response.ok) {
+        console.error(`[Yahoo Finance Error] ${response.status}: ${response.statusText}`);
+        throw new Error(`Failed to fetch real data for ${ticker} (${response.status}). NO MOCK DATA - Real data required.`);
+      }
+
       const data = await response.json();
 
-      console.log(`[Alpha Vantage Response Keys]`, Object.keys(data));
-
-      if (data['Error Message']) {
-        throw new Error(`Alpha Vantage error: ${data['Error Message']}`);
-      }
-
-      if (data['Note']) {
-        console.error('[Rate Limit]', data['Note']);
-        throw new Error('API rate limit reached. Please wait 1 minute and try again. NO MOCK DATA - REAL DATA ONLY.');
-      }
-
-      if (data['Information']) {
-        console.error('[API Info]', data['Information']);
-        throw new Error('API call frequency exceeded. Please wait and try again. NO MOCK DATA - REAL DATA ONLY.');
-      }
-
-      const timeSeries = data['Time Series (Daily)'];
-      if (!timeSeries) {
-        console.error('[No Time Series Data]', JSON.stringify(data, null, 2));
+      if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
+        console.error('[No Chart Data]', JSON.stringify(data, null, 2));
         throw new Error(`No real data available for ${ticker}. Cannot proceed without real market data.`);
       }
 
+      const result = data.chart.result[0];
+      const timestamps = result.timestamp;
+      const quotes = result.indicators.quote[0];
+
+      if (!timestamps || !quotes) {
+        throw new Error(`Invalid data structure for ${ticker}. NO MOCK DATA.`);
+      }
+
       // Transform to PriceData format
-      const priceData = Object.entries(timeSeries)
-        .slice(0, days)
-        .map(([date, values]: [string, any]) => ({
-          date,
-          open: parseFloat(values['1. open']),
-          high: parseFloat(values['2. high']),
-          low: parseFloat(values['3. low']),
-          close: parseFloat(values['4. close']),
-          volume: parseInt(values['6. volume']),
-        }))
-        .reverse();
+      const priceData = timestamps.map((timestamp: number, i: number) => ({
+        date: new Date(timestamp * 1000).toISOString().split('T')[0],
+        open: quotes.open[i] || 0,
+        high: quotes.high[i] || 0,
+        low: quotes.low[i] || 0,
+        close: quotes.close[i] || 0,
+        volume: quotes.volume[i] || 0,
+      })).filter((d: any) => d.close > 0); // Filter out invalid data points
+
+      if (priceData.length === 0) {
+        throw new Error(`No valid price data for ${ticker}. NO MOCK DATA.`);
+      }
 
       setCache(cacheKey, priceData);
 
       return new Response(JSON.stringify(priceData), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Data-Source': 'alpha-vantage' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Data-Source': 'yahoo-finance' }
       });
     }
 
@@ -132,33 +127,49 @@ serve(async (req) => {
         });
       }
 
-      const apiUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`;
-      const response = await callAlphaVantage(apiUrl);
+      const apiUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
+      const response = await callYahooFinance(apiUrl);
+
+      if (!response.ok) {
+        console.error(`[Yahoo Finance Error] ${response.status}: ${response.statusText}`);
+        throw new Error(`Failed to fetch current price for ${ticker}. NO MOCK DATA.`);
+      }
+
       const data = await response.json();
 
-      if (data['Error Message']) {
-        throw new Error(`Alpha Vantage error: ${data['Error Message']}`);
+      if (!data.chart || !data.chart.result || data.chart.result.length === 0) {
+        throw new Error(`No current price data for ${ticker}. NO MOCK DATA.`);
       }
 
-      if (data['Note']) {
-        throw new Error('API rate limit reached. Please wait 1 minute. NO MOCK DATA - REAL DATA ONLY.');
+      const result = data.chart.result[0];
+      const meta = result.meta;
+      const quotes = result.indicators.quote[0];
+      const timestamps = result.timestamp;
+
+      if (!quotes || !timestamps || timestamps.length < 2) {
+        throw new Error(`Insufficient data for ${ticker}. NO MOCK DATA.`);
       }
 
-      const quote = data['Global Quote'];
-      if (!quote || !quote['05. price']) {
-        throw new Error(`No real price data available for ${ticker}. Cannot proceed without real market data.`);
-      }
+      // Get last two data points for change calculation
+      const lastIndex = timestamps.length - 1;
+      const prevIndex = lastIndex - 1;
 
-      const result = {
-        price: parseFloat(quote['05. price']),
-        change: parseFloat(quote['09. change']),
-        changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+      const currentPrice = quotes.close[lastIndex] || meta.regularMarketPrice || 0;
+      const previousClose = quotes.close[prevIndex] || meta.previousClose || currentPrice;
+
+      const change = currentPrice - previousClose;
+      const changePercent = previousClose > 0 ? (change / previousClose) * 100 : 0;
+
+      const currentData = {
+        price: currentPrice,
+        change: change,
+        changePercent: changePercent,
       };
 
-      setCache(cacheKey, result);
+      setCache(cacheKey, currentData);
 
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Data-Source': 'alpha-vantage' }
+      return new Response(JSON.stringify(currentData), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Data-Source': 'yahoo-finance' }
       });
     }
 
