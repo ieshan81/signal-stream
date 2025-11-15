@@ -23,7 +23,10 @@ export function multiFactorStrategy(
   const momentumWeight = params.momentumWeight || 0.7;
   const volatilityWeight = params.volatilityWeight || 0.3;
 
-  if (data.length < momentumPeriod) {
+  // We need at least momentumPeriod + 1 data points to compare current
+  // price with the lookback window. Otherwise `oldPrice` becomes
+  // undefined which results in `NaN` momentum values downstream.
+  if (data.length < momentumPeriod + 1) {
     return {
       name: "Multi-Factor",
       rawScore: 0,
@@ -38,6 +41,16 @@ export function multiFactorStrategy(
   // Calculate Momentum (6-month return)
   const currentPrice = closes[closes.length - 1];
   const oldPrice = closes[closes.length - momentumPeriod - 1];
+
+  if (oldPrice === undefined || oldPrice === 0) {
+    return {
+      name: "Multi-Factor",
+      rawScore: 0,
+      normalizedScore: 0,
+      direction: "neutral",
+      meta: { error: "Momentum calculation failed" },
+    };
+  }
   const momentum = (currentPrice - oldPrice) / oldPrice;
 
   // Calculate Volatility (annualized)
