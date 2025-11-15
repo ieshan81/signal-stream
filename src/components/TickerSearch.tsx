@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export function TickerSearch() {
   const [query, setQuery] = useState("");
@@ -11,10 +12,19 @@ export function TickerSearch() {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const trimmedQuery = query.trim().toUpperCase();
-    if (trimmedQuery) {
-      navigate(`/asset/${trimmedQuery}`);
-      setQuery("");
+    if (!trimmedQuery) {
+      toast.error("Please enter a ticker symbol");
+      return;
     }
+    
+    // Validate basic format
+    if (trimmedQuery.length < 1 || trimmedQuery.length > 20) {
+      toast.error("Invalid ticker format");
+      return;
+    }
+    
+    navigate(`/asset/${trimmedQuery}`);
+    setQuery("");
   };
 
   return (
