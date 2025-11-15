@@ -10,21 +10,14 @@ const RATE_LIMIT_MS = 20000; // 20 seconds between calls (3 calls/min)
 const LONG_CACHE_TTL = 60 * 60 * 1000; // 60 minutes for historical data
 const SHORT_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for current prices
 
-// In-memory cache
+// In-memory cache for REAL data only
 const cache = new Map<string, { data: any; timestamp: number }>();
 let lastCallTime = 0;
-let consecutiveErrors = 0;
-const MAX_CONSECUTIVE_ERRORS = 1; // Switch to mock after just 1 error
 
 function getCached(key: string, ttlMs: number) {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.timestamp < ttlMs) {
     console.log(`[Cache HIT] ${key}`);
-    return cached.data;
-  }
-  // If rate limited, return stale cache if available
-  if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS && cached) {
-    console.log(`[Cache STALE] ${key} (returning due to rate limits)`);
     return cached.data;
   }
   return null;
@@ -39,45 +32,15 @@ async function callAlphaVantage(url: string) {
   const now = Date.now();
   const timeSinceLastCall = now - lastCallTime;
   
-  // Add exponential backoff if we're seeing errors
-  const backoffMultiplier = Math.min(consecutiveErrors, 5);
-  const effectiveRateLimit = RATE_LIMIT_MS * (1 + backoffMultiplier * 0.5);
-  
-  if (timeSinceLastCall < effectiveRateLimit) {
-    const waitTime = effectiveRateLimit - timeSinceLastCall;
-    console.log(`[Rate Limit] Waiting ${waitTime}ms before API call (errors: ${consecutiveErrors})`);
+  if (timeSinceLastCall < RATE_LIMIT_MS) {
+    const waitTime = RATE_LIMIT_MS - timeSinceLastCall;
+    console.log(`[Rate Limit] Waiting ${waitTime}ms before API call`);
     await new Promise(resolve => setTimeout(resolve, waitTime));
   }
   
   lastCallTime = Date.now();
   console.log(`[API Call] ${url.split('?')[0]}`);
   return fetch(url);
-}
-
-function generateMockHistoricalData(ticker: string, days: number): any[] {
-  console.log(`[Mock Data] Generating for ${ticker}`);
-  const basePrice = Math.random() * 200 + 50; // Random base price between 50-250
-  const data = [];
-  const now = Date.now();
-  
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(now - i * 24 * 60 * 60 * 1000);
-    const dateStr = date.toISOString().split('T')[0];
-    const volatility = basePrice * 0.02; // 2% daily volatility
-    const change = (Math.random() - 0.5) * 2 * volatility;
-    const close = basePrice + change;
-    
-    data.push({
-      date: dateStr,
-      open: close * (1 + (Math.random() - 0.5) * 0.01),
-      high: close * (1 + Math.random() * 0.02),
-      low: close * (1 - Math.random() * 0.02),
-      close: close,
-      volume: Math.floor(Math.random() * 10000000) + 1000000,
-    });
-  }
-  
-  return data;
 }
 
 serve(async (req) => {
@@ -109,19 +72,8 @@ serve(async (req) => {
       const cacheKey = `hist_${symbol}_${days}`;
       const cached = getCached(cacheKey, LONG_CACHE_TTL);
       if (cached) {
-        consecutiveErrors = Math.max(0, consecutiveErrors - 1); // Decrease error count on cache hit
         return new Response(JSON.stringify(cached), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      // If too many consecutive errors, return mock data
-      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        console.log(`[Fallback] Using mock data for ${ticker} due to rate limits`);
-        const mockData = generateMockHistoricalData(ticker, days);
-        setCache(cacheKey, mockData);
-        return new Response(JSON.stringify(mockData), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Data-Source': 'mock' }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Data-Source': 'cache' }
         });
       }
 
@@ -137,20 +89,18 @@ serve(async (req) => {
 
       if (data['Note']) {
         console.error('[Rate Limit]', data['Note']);
-        throw new Error('API rate limit reached. Please try again in 1 minute.');
+        throw new Error('API rate limit reached. Please wait 1 minute and try again. NO MOCK DATA - REAL DATA ONLY.');
       }
 
       if (data['Information']) {
         console.error('[API Info]', data['Information']);
-        consecutiveErrors++;
-        throw new Error('API call frequency exceeded. Please try again later.');
+        throw new Error('API call frequency exceeded. Please wait and try again. NO MOCK DATA - REAL DATA ONLY.');
       }
 
       const timeSeries = data['Time Series (Daily)'];
       if (!timeSeries) {
         console.error('[No Time Series Data]', JSON.stringify(data, null, 2));
-        consecutiveErrors++;
-        throw new Error(`No data available for ${ticker}. API response: ${JSON.stringify(data).substring(0, 200)}`);
+        throw new Error(`No real data available for ${ticker}. Cannot proceed without real market data.`);
       }
 
       // Transform to PriceData format
@@ -166,7 +116,6 @@ serve(async (req) => {
         }))
         .reverse();
 
-      consecutiveErrors = 0; // Reset error count on success
       setCache(cacheKey, priceData);
 
       return new Response(JSON.stringify(priceData), {
@@ -178,23 +127,8 @@ serve(async (req) => {
       const cacheKey = `current_${symbol}`;
       const cached = getCached(cacheKey, SHORT_CACHE_TTL);
       if (cached) {
-        consecutiveErrors = Math.max(0, consecutiveErrors - 1);
         return new Response(JSON.stringify(cached), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      // If too many consecutive errors, return mock current price
-      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        console.log(`[Fallback] Using mock current price for ${ticker}`);
-        const mockPrice = {
-          price: Math.random() * 200 + 50,
-          change: (Math.random() - 0.5) * 10,
-          changePercent: (Math.random() - 0.5) * 5,
-        };
-        setCache(cacheKey, mockPrice);
-        return new Response(JSON.stringify(mockPrice), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Data-Source': 'mock' }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Data-Source': 'cache' }
         });
       }
 
@@ -207,12 +141,12 @@ serve(async (req) => {
       }
 
       if (data['Note']) {
-        throw new Error('API rate limit reached. Please try again in 1 minute.');
+        throw new Error('API rate limit reached. Please wait 1 minute. NO MOCK DATA - REAL DATA ONLY.');
       }
 
       const quote = data['Global Quote'];
       if (!quote || !quote['05. price']) {
-        throw new Error(`No price data available for ${ticker}`);
+        throw new Error(`No real price data available for ${ticker}. Cannot proceed without real market data.`);
       }
 
       const result = {
@@ -221,7 +155,6 @@ serve(async (req) => {
         changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
       };
 
-      consecutiveErrors = 0; // Reset on success
       setCache(cacheKey, result);
 
       return new Response(JSON.stringify(result), {
@@ -235,22 +168,15 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('[Error]', error);
-    consecutiveErrors++;
+    console.error('[CRITICAL ERROR]', error);
     
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     
-    // If we're rate limited, suggest using cached/mock data
-    const isRateLimited = errorMessage.includes('frequency') || errorMessage.includes('rate limit');
-    const suggestion = isRateLimited 
-      ? ' Dashboard will use cached/mock data until rate limits reset.'
-      : '';
-    
     return new Response(
       JSON.stringify({ 
-        error: errorMessage + suggestion,
-        consecutiveErrors,
-        fallbackAvailable: consecutiveErrors >= MAX_CONSECUTIVE_ERRORS
+        error: errorMessage,
+        critical: true,
+        message: 'REAL DATA UNAVAILABLE - System will not provide mock data for trading safety'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
