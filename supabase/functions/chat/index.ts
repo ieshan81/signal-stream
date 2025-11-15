@@ -18,6 +18,49 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Validate messages array
+    if (!Array.isArray(messages)) {
+      return new Response(
+        JSON.stringify({ error: "Messages must be an array" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (messages.length === 0 || messages.length > 50) {
+      return new Response(
+        JSON.stringify({ error: "Message count must be between 1 and 50" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate each message structure and size
+    let totalSize = 0;
+    for (const msg of messages) {
+      if (!msg.role || !msg.content || typeof msg.content !== "string") {
+        return new Response(
+          JSON.stringify({ error: "Invalid message format. Each message must have role and content" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (msg.content.length > 10000) {
+        return new Response(
+          JSON.stringify({ error: "Individual message content cannot exceed 10,000 characters" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      totalSize += msg.content.length;
+    }
+
+    // Validate total conversation size
+    if (totalSize > 50000) {
+      return new Response(
+        JSON.stringify({ error: "Total conversation size cannot exceed 50,000 characters" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log("[Chat] Processing request with", messages.length, "messages");
 
     const systemPrompt = `You are a specialized trading assistant ONLY for this quantitative trading dashboard. You MUST focus exclusively on trading concepts and dashboard features.
