@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Activity, TrendingUp, BarChart3, AlertCircle } from "lucide-react";
+import { Activity, TrendingUp, BarChart3, AlertCircle, Briefcase, Star, Lightbulb, LogOut, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LiveTickerTape } from "@/components/LiveTickerTape";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const [healthStatus, setHealthStatus] = useState<"ok" | "error">("ok");
   const location = useLocation();
+  const { user, signOut } = useAuth();
   
   // Live ticker tapes - show top assets from different categories
   const tickerTickers = ["AAPL", "MSFT", "BTC-USD", "ETH-USD", "EURUSD=X", "GOOGL", "TSLA", "SOL-USD"];
@@ -31,6 +42,12 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { href: "/backtest", label: "Backtest", icon: BarChart3 },
   ];
 
+  const protectedNavItems = user ? [
+    { href: "/portfolio", label: "Portfolio", icon: Briefcase },
+    { href: "/watchlist", label: "Watchlist", icon: Star },
+    { href: "/advice", label: "Advice", icon: Lightbulb },
+  ] : [];
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -50,7 +67,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-6">
               {/* Navigation */}
               <nav className="hidden md:flex items-center gap-1">
-                {navItems.map((item) => {
+                {[...navItems, ...protectedNavItems].map((item) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.href;
                   return (
@@ -83,6 +100,31 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                   {healthStatus === "ok" ? "Live" : "Offline"}
                 </span>
               </div>
+
+              {/* User Menu */}
+              {user ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full">
+                      <User className="h-5 w-5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>{user.email}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => signOut()}>
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Link to="/auth">
+                  <Button variant="default" size="sm">
+                    Login
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
