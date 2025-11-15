@@ -32,11 +32,41 @@ export function maCrossoverStrategy(
   const shortMA = calculateSMA(closes, shortWindow);
   const longMA = calculateSMA(closes, longWindow);
 
-  // Get last valid values
-  const lastShortMA = shortMA[shortMA.length - 1];
-  const lastLongMA = longMA[longMA.length - 1];
-  const prevShortMA = shortMA[shortMA.length - 2];
-  const prevLongMA = longMA[longMA.length - 2];
+  const getLastTwoValid = (values: number[]): [number | undefined, number | undefined] => {
+    let last: number | undefined;
+    let previous: number | undefined;
+
+    for (let i = values.length - 1; i >= 0; i--) {
+      const value = values[i];
+
+      if (!Number.isNaN(value)) {
+        if (last === undefined) {
+          last = value;
+        } else {
+          previous = value;
+          break;
+        }
+      }
+    }
+
+    return [last, previous];
+  };
+
+  const [lastShortMA, prevShortMA] = getLastTwoValid(shortMA);
+  const [lastLongMA, prevLongMA] = getLastTwoValid(longMA);
+
+  if (lastShortMA === undefined || lastLongMA === undefined) {
+    return {
+      name: "MA Crossover",
+      rawScore: 0,
+      normalizedScore: 0,
+      direction: "neutral",
+      meta: { error: "MA calculation failed" },
+    };
+  }
+
+  const prevShort = prevShortMA ?? lastShortMA;
+  const prevLong = prevLongMA ?? lastLongMA;
   const lastPrice = closes[closes.length - 1];
 
   // Calculate raw score as difference between MAs
@@ -48,10 +78,10 @@ export function maCrossoverStrategy(
   // Determine direction based on crossover
   let direction: SignalDirection = "neutral";
 
-  if (prevShortMA <= prevLongMA && lastShortMA > lastLongMA) {
+  if (prevShort <= prevLong && lastShortMA > lastLongMA) {
     // Golden cross - bullish
     direction = "buy";
-  } else if (prevShortMA >= prevLongMA && lastShortMA < lastLongMA) {
+  } else if (prevShort >= prevLong && lastShortMA < lastLongMA) {
     // Death cross - bearish
     direction = "sell";
   } else if (lastShortMA > lastLongMA) {
