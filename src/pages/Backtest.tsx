@@ -5,15 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, PlayCircle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, PlayCircle, AlertCircle } from "lucide-react";
 import { BacktestConfig, BacktestResult, AssetType } from "@/lib/types";
 import { runBacktest } from "@/lib/backtest/engine";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Backtest = () => {
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState("");
   const [result, setResult] = useState<BacktestResult | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const [config, setConfig] = useState<BacktestConfig>({
     tickers: ["AAPL", "MSFT", "GOOGL"],
@@ -25,17 +30,78 @@ const Backtest = () => {
     initialCapital: 100000,
   });
 
+  const validateConfig = (): boolean => {
+    const errors: string[] = [];
+
+    if (!config.tickers || config.tickers.filter(t => t.trim()).length === 0) {
+      errors.push("At least one ticker is required");
+    }
+
+    if (config.tickers.length > 10) {
+      errors.push("Maximum 10 tickers allowed");
+    }
+
+    if (config.strategies.length === 0) {
+      errors.push("At least one strategy must be selected");
+    }
+
+    const startDate = new Date(config.startDate);
+    const endDate = new Date(config.endDate);
+    const now = new Date();
+
+    if (endDate <= startDate) {
+      errors.push("End date must be after start date");
+    }
+
+    if (endDate > now) {
+      errors.push("End date cannot be in the future");
+    }
+
+    const daysDiff = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysDiff > 730) {
+      errors.push("Maximum backtest period is 2 years");
+    }
+
+    if (config.initialCapital <= 0) {
+      errors.push("Initial capital must be greater than 0");
+    }
+
+    setValidationErrors(errors);
+    return errors.length === 0;
+  };
+
   const handleRunBacktest = async () => {
+    if (!validateConfig()) {
+      toast.error("Please fix validation errors");
+      return;
+    }
+
     setLoading(true);
+    setProgress(0);
+    setStatusMessage("Initializing backtest...");
+    setResult(null);
+
     try {
+      setProgress(20);
+      setStatusMessage("Fetching historical data...");
+      
       const backtestResult = await runBacktest(config);
+      
+      setProgress(100);
+      setStatusMessage("Backtest complete!");
       setResult(backtestResult);
       toast.success("Backtest completed successfully");
     } catch (error) {
       console.error("Backtest error:", error);
-      toast.error("Failed to run backtest");
+      const errorMessage = error instanceof Error ? error.message : "Failed to run backtest";
+      toast.error(errorMessage);
+      setStatusMessage("");
     } finally {
       setLoading(false);
+      setTimeout(() => {
+        setProgress(0);
+        setStatusMessage("");
+      }, 2000);
     }
   };
 
@@ -65,6 +131,33 @@ const Backtest = () => {
             Test strategies on historical data to evaluate performance
           </p>
         </div>
+
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <ul className="list-disc list-inside">
+                {validationErrors.map((error, idx) => (
+                  <li key={idx}>{error}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Progress */}
+        {loading && (
+          <Card className="p-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{statusMessage}</span>
+                <span className="text-sm font-medium">{progress}%</span>
+              </div>
+              <Progress value={progress} />
+            </div>
+          </Card>
+        )}
 
         {/* Configuration */}
         <Card className="p-6">
